@@ -1,6 +1,8 @@
-def main() -> None:
-    print("Hello from browser-automation!")
+from camoufox.sync_api import Camoufox
 
+with Camoufox(headless=False, humanize=True, geoip=True) as browser:
+    page = browser.new_page()
+    page.goto("https://whoer.net")
+    # page.goto("https://www.instagram.com/?hl=ru")
 
-if __name__ == "__main__":
-    main()
+    input("Press Enter to close...")
