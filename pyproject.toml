@@ -3,16 +3,13 @@ name = "browser-automation"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Ilya05228", email = "iliyaand05@gmail.com" }
-]
+authors = [{ name = "Ilya05228", email = "iliyaand05@gmail.com" }]
 requires-python = ">=3.14"
-dependencies = [
-    "camoufox[geoip]>=0.4.11",
-]
+dependencies = ["camoufox[geoip]>=0.4.11"]
 
 [project.scripts]
-browser-automation = "browser_automation:main"
+browser-automation = "browser_automation.main:main"
+main = "browser_automation.main:main"
 
 [build-system]
 requires = ["uv_build>=0.9.9,<0.10.0"]
