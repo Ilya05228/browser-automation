@@ -33,24 +33,18 @@ def main():
         print("🔍 Проверяем fingerprint на whoer.net...")
         page.goto("https://whoer.net")
         input("✅ Проверь whoer.net score! Press Enter для warm-up...")
+        print("🌡️  Warm-up: собираем cookies с 10 сайтов...")
+        for i, site in enumerate(warm_up_sites, 1):
+            print(f"📱 [{i}/10] Загружаем {site}...")
+            page.goto(site)
+            page.wait_for_timeout(2000)  # 2 сек
+            page.mouse.wheel(0, 200)  # Скролл вниз
+            page.wait_for_timeout(1000)  # 1 сек пауза
+
+            print(f"   ✅ Cookies собраны с {site}")
 
         yn = input("Перейти ли в инстаграм с warm-up? (y/n): ")
         if yn.lower() == "y":
-            print("🌡️  Warm-up: собираем cookies с 10 сайтов...")
-
-            # 2. Цикл warm-up (5 сайтов)
-            for i, site in enumerate(warm_up_sites, 1):
-                print(f"📱 [{i}/10] Загружаем {site}...")
-                page.goto(site)
-                page.wait_for_timeout(2000)  # 2 сек
-
-                # Пролистываем чуть-чуть (человеческое поведение)
-                page.mouse.wheel(0, 200)  # Скролл вниз
-                page.wait_for_timeout(1000)  # 1 сек пауза
-
-                print(f"   ✅ Cookies собраны с {site}")
-
-            # 3. Финальный Instagram
             print("📸 Переходим в Instagram с теплыми cookies!")
             page.goto("https://www.instagram.com")
         else:
