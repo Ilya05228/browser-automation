@@ -26,9 +26,9 @@ def main():
         print("🔍 Проверяем fingerprint на whoer.net...")
         page.goto("https://whoer.net")
         input("✅ Проверь whoer.net score! Press Enter для warm-up...")
-        print("🌡️  Warm-up: собираем cookies с 10 сайтов...")
+        print(f"🌡️  Warm-up: собираем cookies с {len(warm_up_sites)} сайтов...")
         for i, site in enumerate(warm_up_sites, 1):
-            print(f"📱 [{i}/10] Загружаем {site}...")
+            print(f"📱 [{i}/{len(warm_up_sites)}] Загружаем {site}...")
             page.goto(site)
             page.wait_for_timeout(2000)  # 2 сек
             page.mouse.wheel(0, 200)  # Скролл вниз
