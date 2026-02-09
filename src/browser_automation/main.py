@@ -10,7 +10,6 @@ def main():
 
     warm_up_sites = [
         "https://habr.com",
-        "https://www.rbc.ru",
         "https://lenta.ru",
         "https://ria.ru",
         "https://www.fontanka.ru",
