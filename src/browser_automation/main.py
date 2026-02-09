@@ -9,8 +9,8 @@ def main():
     print(f"✅ Твой IP: {my_real_ip}")
 
     warm_up_sites = [
-        "https://habr.com",
-        "https://lenta.ru",
+        # "https://habr.com",
+        # "https://lenta.ru",
         "https://www.bbc.com/news",
     ]
 
