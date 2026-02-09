@@ -11,13 +11,7 @@ def main():
     warm_up_sites = [
         "https://habr.com",
         "https://lenta.ru",
-        "https://ria.ru",
-        "https://www.fontanka.ru",
-        "https://tass.ru",
-        "https://news.ycombinator.com",
-        "https://techcrunch.com",
         "https://www.bbc.com/news",
-        "https://www.theverge.com",
     ]
 
     with Camoufox(
