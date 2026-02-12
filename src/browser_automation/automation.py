@@ -46,7 +46,8 @@ class Automation:
             print(f"📥 Загружаю кеш сессии: {session_dir}")
 
         self.browser = Camoufox(headless=False, humanize=True)
-        self.page = self.browser.new_page()
+        context = self.browser.new_context()
+        self.page = context.new_page()
         self.page.set_extra_http_headers({"Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8"})
 
         # Загрузка кеша сессии если есть

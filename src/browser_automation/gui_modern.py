@@ -261,7 +261,7 @@ class ModernGUI(QMainWindow):
             self.selected_files = files
             self.files_list.clear()
             for file in files:
-                self.files_list.addItem(os.path.basename(file))
+                self.files_list.addItem(file)
             self.update_status(f"Выбрано {len(files)} файлов")
 
     def clear_files(self):

@@ -1,4 +1,4 @@
-from browser_automation.gui_modern import main
+from .gui_modern import main
 
 if __name__ == "__main__":
     main()
