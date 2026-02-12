@@ -247,8 +247,52 @@ class Automation:
                 await self.page.context.add_cookies(session_data.get("cookies", []))
                 print(f"✅ Кеш сессии загружен для канала '{self.account_name}'")
         print("📱 Открываю Instagram...")
-        await self.page.goto("https://www.instagram.com/")
+        await self.page.goto(
+            "https://www.instagram.com/",
+            wait_until="domcontentloaded",
+            timeout=60000
+        )
         await self._random_delay_async()
+
+    async def open_instagram_and_save_session_async(self):
+        """Просто открывает страницу логина Instagram и сохраняет сессию после входа."""
+        print("🚀 Открываю Instagram для входа...")
+        self._camoufox_cm = AsyncCamoufox(headless=False, humanize=True)
+        self.browser = await self._camoufox_cm.__aenter__()
+        self.page = await self.browser.new_page()
+        await self.page.set_extra_http_headers(
+            {"Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8"}
+        )
+        cache_file = Path("cache") / "sessions.json"
+        if cache_file.exists():
+            with open(cache_file) as f:
+                all_sessions = json.load(f)
+            session_data = all_sessions.get(self.account_name)
+            if session_data:
+                await self.page.context.add_cookies(session_data.get("cookies", []))
+                print(f"✅ Кеш сессии загружен для канала '{self.account_name}'")
+        print("📱 Открываю страницу логина Instagram...")
+        await self.page.goto(
+            "https://www.instagram.com/accounts/login/",
+            wait_until="domcontentloaded",
+            timeout=60000
+        )
+        await self._random_delay_async()
+        print("✅ Браузер открыт. Войдите в аккаунт, затем сессия будет сохранена.")
+        # Ждём, пока пользователь войдёт (проверяем появление главной страницы или профиля)
+        try:
+            # Ждём либо главную страницу, либо профиль
+            await self.page.wait_for_selector(
+                '[aria-label="Новая публикация"], [aria-label="Home"], a[href*="/accounts/edit/"]',
+                timeout=300000  # до 5 минут на вход
+            )
+            print("✅ Вход выполнен! Сохраняю сессию...")
+            await self.save_session_async()
+            print("✅ Сессия сохранена! Браузер останется открытым.")
+        except Exception as e:
+            print(f"⚠️ Не удалось определить успешный вход: {e}")
+            print("💾 Сохраняю сессию в любом случае...")
+            await self.save_session_async()
 
     async def continue_after_login_async(self):
         """Сохраняем сессию и публикуем в текущей вкладке браузера.

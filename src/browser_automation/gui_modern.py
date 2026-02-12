@@ -4,7 +4,7 @@ from multiprocessing import get_context
 from queue import Empty
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QColor, QFont, QFontDatabase
 from PySide6.QtWidgets import (
     QApplication,
@@ -18,12 +18,13 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from .automation_worker import run_worker
+from .automation_worker import run_worker, run_open_instagram_worker
 
 
 class QueueReaderThread(QThread):
@@ -65,8 +66,15 @@ class ModernGUI(QMainWindow):
         self.out_queue = None
         self.reader_thread = None
         self.selected_files = []
+        # Для второй вкладки - список открытых браузеров
+        self.open_browsers = []  # Список словарей: {"process": Process, "account": str, "out_queue": Queue, "reader_thread": QThread}
         self.init_ui()
         self.load_fonts()
+        
+        # Таймер для периодического обновления списка браузеров
+        self.browsers_update_timer = QTimer()
+        self.browsers_update_timer.timeout.connect(self.update_browsers_list)
+        self.browsers_update_timer.start(5000)  # Обновляем каждые 5 секунд
 
     def load_fonts(self):
         font_paths = [
@@ -103,12 +111,41 @@ class ModernGUI(QMainWindow):
         title_label.setStyleSheet("color: #1a73e8; margin-bottom: 20px;")
         main_layout.addWidget(title_label)
 
+        # Создаём вкладки
+        self.tabs = QTabWidget()
+
+        # Вкладка 1: Автопостинг
+        self.autopost_tab = QWidget()
+        self.init_autopost_tab()
+        self.tabs.addTab(self.autopost_tab, "📤 Автопостинг")
+
+        # Вкладка 2: Открыть Instagram
+        self.open_instagram_tab = QWidget()
+        self.init_open_instagram_tab()
+        self.tabs.addTab(self.open_instagram_tab, "🔐 Открыть Instagram")
+
+        main_layout.addWidget(self.tabs)
+
+        # Общий статус для обеих вкладок
+        self.status_label = QLabel("Готов к работе")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setStyleSheet(
+            "color: #5f6368; font-size: 14px; padding: 10px;"
+        )
+        main_layout.addWidget(self.status_label)
+
+    def init_autopost_tab(self):
+        """Инициализация вкладки автопостинга."""
+        layout = QVBoxLayout(self.autopost_tab)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
+
         description_frame = self.create_input_frame("Описание для Reels")
         self.description_edit = QTextEdit()
         self.description_edit.setPlaceholderText("Введите описание для всех Reels...")
         self.description_edit.setMaximumHeight(100)
         description_frame.layout().addWidget(self.description_edit)
-        main_layout.addWidget(description_frame)
+        layout.addWidget(description_frame)
 
         files_frame = self.create_input_frame("Видео файлы")
         files_layout = QVBoxLayout()
@@ -129,17 +166,17 @@ class ModernGUI(QMainWindow):
         self.files_list.setMaximumHeight(150)
         files_layout.addWidget(self.files_list)
         files_frame.layout().addLayout(files_layout)
-        main_layout.addWidget(files_frame)
+        layout.addWidget(files_frame)
 
         account_frame = self.create_input_frame("Аккаунт Instagram")
         self.account_edit = QLineEdit()
         self.account_edit.setPlaceholderText("Введите имя аккаунта (без @)")
         account_frame.layout().addWidget(self.account_edit)
-        main_layout.addWidget(account_frame)
+        layout.addWidget(account_frame)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        main_layout.addWidget(self.progress_bar)
+        layout.addWidget(self.progress_bar)
 
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(20)
@@ -161,14 +198,47 @@ class ModernGUI(QMainWindow):
         self.continue_btn.setEnabled(False)
         buttons_layout.addWidget(self.continue_btn)
 
-        main_layout.addLayout(buttons_layout)
+        layout.addLayout(buttons_layout)
+        layout.addStretch()
 
-        self.status_label = QLabel("Готов к работе")
-        self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet(
-            "color: #5f6368; font-size: 14px; padding: 10px;"
+    def init_open_instagram_tab(self):
+        """Инициализация вкладки открытия Instagram."""
+        layout = QVBoxLayout(self.open_instagram_tab)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
+
+        info_label = QLabel(
+            "Эта вкладка открывает страницу логина Instagram.\n"
+            "Войдите в аккаунт, и сессия будет автоматически сохранена локально.\n"
+            "Можно открыть несколько браузеров одновременно.\n"
+            "Куки обновляются автоматически каждую минуту."
         )
-        main_layout.addWidget(self.status_label)
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setStyleSheet("color: #ffffff; font-size: 14px; padding: 20px;")
+        layout.addWidget(info_label)
+
+        account_frame = self.create_input_frame("Аккаунт Instagram")
+        self.open_instagram_account_edit = QLineEdit()
+        self.open_instagram_account_edit.setPlaceholderText("Введите имя аккаунта (без @)")
+        account_frame.layout().addWidget(self.open_instagram_account_edit)
+        layout.addWidget(account_frame)
+
+        self.open_instagram_btn = QPushButton("🔐 Открыть Instagram")
+        self.open_instagram_btn.setStyleSheet(
+            self.get_button_style("#1a73e8", hover_color="#4285f4")
+        )
+        self.open_instagram_btn.clicked.connect(self.open_instagram_process)
+        self.open_instagram_btn.setMinimumHeight(50)
+        layout.addWidget(self.open_instagram_btn)
+
+        # Список открытых браузеров
+        browsers_frame = self.create_input_frame("Открытые браузеры")
+        self.open_browsers_list = QListWidget()
+        self.open_browsers_list.setMaximumHeight(200)
+        browsers_frame.layout().addWidget(self.open_browsers_list)
+        layout.addWidget(browsers_frame)
+
+        layout.addStretch()
 
         self.setStyleSheet("""
             QMainWindow {
@@ -213,6 +283,26 @@ class ModernGUI(QMainWindow):
             QProgressBar::chunk {
                 background-color: #1a73e8;
                 border-radius: 5px;
+            }
+            QTabWidget::pane {
+                border: 1px solid #333333;
+                background-color: #1e1e1e;
+                border-radius: 5px;
+            }
+            QTabBar::tab {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                padding: 10px 20px;
+                margin-right: 2px;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px;
+            }
+            QTabBar::tab:selected {
+                background-color: #1a73e8;
+                color: #ffffff;
+            }
+            QTabBar::tab:hover {
+                background-color: #4285f4;
             }
         """)
 
@@ -352,6 +442,89 @@ class ModernGUI(QMainWindow):
         self.clear_files_btn.setEnabled(True)
         self.start_btn.setEnabled(True)
         self.continue_btn.setEnabled(False)
+        self.update_status("Готов к работе")
+
+    def open_instagram_process(self):
+        """Обработчик для открытия Instagram."""
+        account = self.open_instagram_account_edit.text().strip().lower().replace("@", "")
+        if not account:
+            QMessageBox.warning(self, "Ошибка", "Введите имя аккаунта Instagram")
+            return
+
+        # Проверяем, не открыт ли уже браузер для этого аккаунта
+        for browser_info in self.open_browsers:
+            if browser_info["account"] == account:
+                QMessageBox.warning(
+                    self, "Внимание", f"Браузер для аккаунта {account} уже открыт!"
+                )
+                return
+
+        # Очищаем форму сразу после нажатия кнопки
+        self.open_instagram_account_edit.clear()
+
+        ctx = get_context("spawn")
+        out_queue = ctx.Queue()
+        worker_process = ctx.Process(
+            target=run_open_instagram_worker,
+            args=(out_queue, account),
+        )
+        worker_process.start()
+
+        # Создаём reader thread для этого браузера
+        reader_thread = QueueReaderThread(out_queue, worker_process)
+        reader_thread.status_update.connect(
+            lambda msg, acc=account: self.update_open_instagram_status(msg, acc)
+        )
+        reader_thread.finished.connect(
+            lambda acc=account: self.on_open_instagram_finished(acc)
+        )
+        reader_thread.error.connect(
+            lambda err, acc=account: self.show_open_instagram_error(err, acc)
+        )
+        reader_thread.start()
+
+        # Сохраняем информацию о браузере
+        browser_info = {
+            "process": worker_process,
+            "account": account,
+            "out_queue": out_queue,
+            "reader_thread": reader_thread,
+        }
+        self.open_browsers.append(browser_info)
+
+        # Обновляем список открытых браузеров
+        self.update_browsers_list()
+
+        self.update_status(f"Запуск браузера для {account}...")
+
+    def update_browsers_list(self):
+        """Обновляет список открытых браузеров."""
+        self.open_browsers_list.clear()
+        for browser_info in self.open_browsers:
+            account = browser_info["account"]
+            process = browser_info["process"]
+            status = "🟢 Работает" if process.is_alive() else "🔴 Закрыт"
+            self.open_browsers_list.addItem(f"{status} - {account}")
+
+    def update_open_instagram_status(self, message, account):
+        """Обновляет статус для конкретного браузера."""
+        self.update_status(f"[{account}] {message}")
+
+    def on_open_instagram_finished(self, account):
+        """Обработчик завершения открытия Instagram."""
+        self.update_status(f"Браузер для {account} открыт и работает. Куки обновляются каждую минуту.")
+        self.update_browsers_list()
+
+    def show_open_instagram_error(self, error_message, account):
+        """Обработчик ошибки при открытии Instagram."""
+        QMessageBox.critical(
+            self, "Ошибка", f"Ошибка при открытии браузера для {account}:\n{error_message}"
+        )
+        # Удаляем браузер из списка при ошибке
+        self.open_browsers = [
+            b for b in self.open_browsers if b["account"] != account
+        ]
+        self.update_browsers_list()
         self.update_status("Готов к работе")
 
 

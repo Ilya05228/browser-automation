@@ -62,60 +62,70 @@
         "sameSite": "None"
       },
       {
-        "name": "wd",
-        "value": "1464x993",
-        "domain": ".instagram.com",
-        "path": "/",
-        "expires": 1771494541,
-        "httpOnly": false,
-        "secure": true,
-        "sameSite": "Lax"
-      },
-      {
         "name": "dpr",
         "value": "1",
         "domain": ".instagram.com",
         "path": "/",
-        "expires": 1771494546,
+        "expires": 1771496519,
         "httpOnly": false,
         "secure": true,
         "sameSite": "None"
+      },
+      {
+        "name": "wd",
+        "value": "974x978",
+        "domain": ".instagram.com",
+        "path": "/",
+        "expires": 1771496803,
+        "httpOnly": false,
+        "secure": true,
+        "sameSite": "Lax"
       },
       {
         "name": "csrftoken",
         "value": "3jmfsQV7dlfSPx33iRDtLe",
         "domain": ".instagram.com",
         "path": "/",
-        "expires": 1805449750,
-        "httpOnly": false,
-        "secure": true,
-        "sameSite": "None"
-      },
-      {
-        "name": "ds_user_id",
-        "value": "80244985144",
-        "domain": ".instagram.com",
-        "path": "/",
-        "expires": 1778665750,
+        "expires": 1805452012,
         "httpOnly": false,
         "secure": true,
         "sameSite": "None"
       },
       {
         "name": "rur",
-        "value": "\"RVA\\05480244985144\\0541802425750:01febbab95061bd6737c52ba0b9c578ee508b2e386e1657294457fa297851376dc8468cf\"",
+        "value": "\"RVA\\05480244985144\\0541802428011:01fef188b108fedaba067fbb6327d79e7eae44799f46962337712cd831807625212f682e\"",
         "domain": ".instagram.com",
         "path": "/",
         "expires": -1,
         "httpOnly": true,
         "secure": true,
         "sameSite": "Lax"
+      },
+      {
+        "name": "ds_user_id",
+        "value": "80244985144",
+        "domain": ".instagram.com",
+        "path": "/",
+        "expires": 1778668012,
+        "httpOnly": false,
+        "secure": true,
+        "sameSite": "None"
+      },
+      {
+        "name": "fr",
+        "value": "0yXkIpdmVK1Iykzb3.AWew2T1w9uRLBzZO4FRaXrSXZjocJslyChyR_5AwPShVRoa7p0M.Bpjarq..AAA.0.0.Bpjarq.AWeI4cUdB9PcDDX859rniHAowFQ",
+        "domain": ".facebook.com",
+        "path": "/",
+        "expires": 1778668010,
+        "httpOnly": true,
+        "secure": true,
+        "sameSite": "None"
       }
     ],
     "local_storage": {
       "undefined": ""
     },
-    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:135.0) Gecko/20100101 Firefox/135.0",
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0",
     "viewport": {
       "width": 1280,
       "height": 720
