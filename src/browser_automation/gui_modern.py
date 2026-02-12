@@ -1,6 +1,7 @@
 import os
 import sys
-import traceback
+from multiprocessing import get_context
+from queue import Empty
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal
@@ -22,42 +23,47 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .automation import Automation
+from .automation_worker import run_worker
 
 
-class AutomationThread(QThread):
+class QueueReaderThread(QThread):
+    """Читает сообщения из очереди процесса и шлёт сигналы в GUI."""
     status_update = Signal(str)
     finished = Signal()
     error = Signal(str)
 
-    def __init__(self, automation, mode="start"):
+    def __init__(self, out_queue, process):
         super().__init__()
-        self.automation = automation
-        self.mode = mode
+        self.out_queue = out_queue
+        self.process = process
 
     def run(self):
-        try:
-            if self.mode == "start":
-                self.status_update.emit("Запуск браузера...")
-                self.automation.start()
-                self.status_update.emit(
-                    "Войдите в аккаунт Instagram, затем нажмите 'Продолжить'"
-                )
-            elif self.mode == "continue":
-                self.status_update.emit("Публикация Reels...")
-                self.automation.continue_after_login()
-                self.status_update.emit("Все Reels опубликованы!")
+        while True:
+            try:
+                msg = self.out_queue.get(timeout=0.3)
+            except Empty:
+                if not self.process.is_alive():
+                    # Процесс завершился без "done" — сбрасываем UI, чтобы кнопки снова работали
+                    self.error.emit("Процесс завершился. Можно снова выбрать файлы и начать.")
+                    break
+                continue
+            if msg[0] == "status":
+                self.status_update.emit(msg[1])
+            elif msg[0] == "finished":
                 self.finished.emit()
-        except Exception as e:
-            error_msg = f"{str(e)}\n\n{traceback.format_exc()}"
-            self.error.emit(error_msg)
+            elif msg[0] == "error":
+                self.error.emit(msg[1])
+            elif msg[0] == "done":
+                break
 
 
 class ModernGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.automation = None
-        self.automation_thread = None
+        self.worker_process = None
+        self.in_queue = None
+        self.out_queue = None
+        self.reader_thread = None
         self.selected_files = []
         self.init_ui()
         self.load_fonts()
@@ -289,26 +295,30 @@ class ModernGUI(QMainWindow):
         self.clear_files_btn.setEnabled(False)
         self.start_btn.setEnabled(False)
 
-        self.automation = Automation(description, self.selected_files, account)
-        self.automation_thread = AutomationThread(self.automation, "start")
-        self.automation_thread.status_update.connect(self.update_status)
-        self.automation_thread.error.connect(self.show_error)
-        self.automation_thread.start()
+        # spawn = новый процесс без наследования asyncio/Qt от родителя (fork даёт "Sync API inside asyncio loop")
+        ctx = get_context("spawn")
+        self.in_queue = ctx.Queue()
+        self.out_queue = ctx.Queue()
+        self.worker_process = ctx.Process(
+            target=run_worker,
+            args=(self.in_queue, self.out_queue, description, self.selected_files, account),
+        )
+        self.worker_process.start()
+        self.reader_thread = QueueReaderThread(self.out_queue, self.worker_process)
+        self.reader_thread.status_update.connect(self.update_status)
+        self.reader_thread.finished.connect(self.on_finished)
+        self.reader_thread.error.connect(self.show_error)
+        self.reader_thread.start()
 
         self.continue_btn.setEnabled(True)
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, 0)
 
     def continue_process(self):
-        if not self.automation:
+        if not self.in_queue:
             return
-
         self.continue_btn.setEnabled(False)
-        self.automation_thread = AutomationThread(self.automation, "continue")
-        self.automation_thread.status_update.connect(self.update_status)
-        self.automation_thread.finished.connect(self.on_finished)
-        self.automation_thread.error.connect(self.show_error)
-        self.automation_thread.start()
+        self.in_queue.put("continue")
 
     def update_status(self, message):
         self.status_label.setText(message)
