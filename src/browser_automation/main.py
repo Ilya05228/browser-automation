@@ -6,7 +6,7 @@ import multiprocessing
 if sys.platform.startswith('win'):
     multiprocessing.freeze_support()
 
-from .gui_modern import main
+from browser_automation.gui_modern import main
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

@@ -12,7 +12,7 @@ from camoufox.async_api import AsyncCamoufox
 
 
 async def _run_async(in_queue, out_queue, description, video_files, account_name):
-    from .automation import Automation
+    from browser_automation.automation import Automation
 
     automation = Automation(description, list(video_files), account_name)
     out_queue.put(("status", "Запуск браузера..."))
@@ -31,7 +31,7 @@ async def _run_async(in_queue, out_queue, description, video_files, account_name
 
 async def _run_open_instagram_async(out_queue, account_name):
     """Запускает браузер и работает постоянно, периодически обновляя куки."""
-    from .automation import Automation
+    from browser_automation.automation import Automation
 
     automation = Automation("", [], account_name)
     out_queue.put(("status", f"Запуск браузера для {account_name}..."))
@@ -146,6 +146,7 @@ def run_worker(in_queue, out_queue, description, video_files, account_name):
 
 async def _run_antidetect_browser_async(out_queue):
     """Запускает антидетект браузер без куков и сессий."""
+    # Не нужен импорт Automation здесь, используем напрямую Camoufox
     print("🚀 Открываю антидетект браузер...")
     
     # Создаём новый браузер без загрузки куков

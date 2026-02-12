@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .automation_worker import run_worker, run_open_instagram_worker, run_antidetect_browser_worker
+from browser_automation.automation_worker import run_worker, run_open_instagram_worker, run_antidetect_browser_worker
 
 
 class QueueReaderThread(QThread):

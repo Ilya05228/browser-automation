@@ -32,6 +32,12 @@ python -m browser_automation.main
 
 ## Сборка исполняемого файла
 
+### Важно: Сборка для текущей платформы
+
+PyInstaller собирает приложение **только для текущей платформы**:
+- На **Linux** → собирается Linux версия → `dist/instagram-reels-publisher`
+- На **Windows** → собирается Windows версия → `dist/instagram-reels-publisher.exe`
+
 ### Linux
 
 ```bash
@@ -47,13 +53,11 @@ chmod +x build.sh
 build.bat
 ```
 
-Или вручную:
+Исполняемый файл будет в `dist\instagram-reels-publisher.exe`
 
-```cmd
-pyinstaller build.spec --clean --noconfirm
-```
+### Сборка для другой платформы
 
-Исполняемый файл будет в `dist/instagram-reels-publisher.exe`
+См. [PLATFORMS.md](PLATFORMS.md) для инструкций по сборке для другой платформы.
 
 ### Подробные инструкции
 
