@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .automation_worker import run_worker, run_open_instagram_worker
+from .automation_worker import run_worker, run_open_instagram_worker, run_antidetect_browser_worker
 
 
 class QueueReaderThread(QThread):
@@ -68,6 +68,8 @@ class ModernGUI(QMainWindow):
         self.selected_files = []
         # Для второй вкладки - список открытых браузеров
         self.open_browsers = []  # Список словарей: {"process": Process, "account": str, "out_queue": Queue, "reader_thread": QThread}
+        # Для третьей вкладки - список открытых антидетект браузеров
+        self.antidetect_browsers = []  # Список словарей: {"process": Process, "out_queue": Queue, "reader_thread": QThread}
         self.init_ui()
         self.load_fonts()
         
@@ -124,6 +126,11 @@ class ModernGUI(QMainWindow):
         self.init_open_instagram_tab()
         self.tabs.addTab(self.open_instagram_tab, "🔐 Открыть Instagram")
 
+        # Вкладка 3: Открыть антидетект браузер
+        self.antidetect_browser_tab = QWidget()
+        self.init_antidetect_browser_tab()
+        self.tabs.addTab(self.antidetect_browser_tab, "🕵️ Антидетект браузер")
+
         main_layout.addWidget(self.tabs)
 
         # Общий статус для обеих вкладок
@@ -133,6 +140,75 @@ class ModernGUI(QMainWindow):
             "color: #5f6368; font-size: 14px; padding: 10px;"
         )
         main_layout.addWidget(self.status_label)
+
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #121212;
+            }
+            QFrame {
+                background-color: #1e1e1e;
+                border-radius: 10px;
+                padding: 15px;
+                border: 1px solid #333333;
+            }
+            QLabel {
+                color: #ffffff;
+            }
+            QTextEdit, QLineEdit, QListWidget {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #444444;
+                border-radius: 5px;
+                padding: 8px;
+                font-size: 14px;
+                selection-background-color: #1a73e8;
+            }
+            QTextEdit:focus, QLineEdit:focus {
+                border: 2px solid #1a73e8;
+            }
+            QListWidget::item {
+                padding: 5px;
+                border-bottom: 1px solid #333333;
+                color: #ffffff;
+            }
+            QListWidget::item:selected {
+                background-color: #1a73e8;
+                color: #ffffff;
+            }
+            QProgressBar {
+                border: 1px solid #444444;
+                border-radius: 5px;
+                text-align: center;
+                color: #ffffff;
+            }
+            QProgressBar::chunk {
+                background-color: #1a73e8;
+                border-radius: 5px;
+            }
+            QTabWidget::pane {
+                border: 1px solid #333333;
+                background-color: #1e1e1e;
+                border-radius: 5px;
+            }
+            QTabBar::tab {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                padding: 10px 20px;
+                margin-right: 2px;
+                border-top-left-radius: 5px;
+                border-top-right-radius: 5px;
+            }
+            QTabBar::tab:selected {
+                background-color: #1a73e8;
+                color: #ffffff;
+            }
+            QTabBar::tab:hover {
+                background-color: #4285f4;
+            }
+        """)
+
+        font = QFont("Roboto", 10)
+        QApplication.setFont(font)
 
     def init_autopost_tab(self):
         """Инициализация вкладки автопостинга."""
@@ -240,74 +316,38 @@ class ModernGUI(QMainWindow):
 
         layout.addStretch()
 
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #121212;
-            }
-            QFrame {
-                background-color: #1e1e1e;
-                border-radius: 10px;
-                padding: 15px;
-                border: 1px solid #333333;
-            }
-            QLabel {
-                color: #ffffff;
-            }
-            QTextEdit, QLineEdit, QListWidget {
-                background-color: #2d2d2d;
-                color: #ffffff;
-                border: 1px solid #444444;
-                border-radius: 5px;
-                padding: 8px;
-                font-size: 14px;
-                selection-background-color: #1a73e8;
-            }
-            QTextEdit:focus, QLineEdit:focus {
-                border: 2px solid #1a73e8;
-            }
-            QListWidget::item {
-                padding: 5px;
-                border-bottom: 1px solid #333333;
-                color: #ffffff;
-            }
-            QListWidget::item:selected {
-                background-color: #1a73e8;
-                color: #ffffff;
-            }
-            QProgressBar {
-                border: 1px solid #444444;
-                border-radius: 5px;
-                text-align: center;
-                color: #ffffff;
-            }
-            QProgressBar::chunk {
-                background-color: #1a73e8;
-                border-radius: 5px;
-            }
-            QTabWidget::pane {
-                border: 1px solid #333333;
-                background-color: #1e1e1e;
-                border-radius: 5px;
-            }
-            QTabBar::tab {
-                background-color: #2d2d2d;
-                color: #ffffff;
-                padding: 10px 20px;
-                margin-right: 2px;
-                border-top-left-radius: 5px;
-                border-top-right-radius: 5px;
-            }
-            QTabBar::tab:selected {
-                background-color: #1a73e8;
-                color: #ffffff;
-            }
-            QTabBar::tab:hover {
-                background-color: #4285f4;
-            }
-        """)
+    def init_antidetect_browser_tab(self):
+        """Инициализация вкладки антидетект браузера."""
+        layout = QVBoxLayout(self.antidetect_browser_tab)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
 
-        font = QFont("Roboto", 10)
-        QApplication.setFont(font)
+        info_label = QLabel(
+            "Эта вкладка открывает антидетект браузер БЕЗ куков и сессий.\n"
+            "Каждый браузер полностью изолирован и не использует сохранённые данные.\n"
+            "Можно открыть сколько угодно браузеров одновременно.\n"
+            "Просто нажмите кнопку для открытия нового браузера."
+        )
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setStyleSheet("color: #ffffff; font-size: 14px; padding: 20px;")
+        layout.addWidget(info_label)
+
+        self.open_antidetect_btn = QPushButton("🕵️ Открыть антидетект браузер")
+        self.open_antidetect_btn.setStyleSheet(
+            self.get_button_style("#9c27b0", hover_color="#7b1fa2")
+        )
+        self.open_antidetect_btn.clicked.connect(self.open_antidetect_browser_process)
+        self.open_antidetect_btn.setMinimumHeight(50)
+        layout.addWidget(self.open_antidetect_btn)
+
+        # Список открытых антидетект браузеров
+        browsers_frame = self.create_input_frame("Открытые антидетект браузеры")
+        self.antidetect_browsers_list = QListWidget()
+        self.antidetect_browsers_list.setMaximumHeight(200)
+        browsers_frame.layout().addWidget(self.antidetect_browsers_list)
+        layout.addWidget(browsers_frame)
+
+        layout.addStretch()
 
     def create_input_frame(self, title):
         frame = QFrame()
@@ -462,13 +502,15 @@ class ModernGUI(QMainWindow):
         # Очищаем форму сразу после нажатия кнопки
         self.open_instagram_account_edit.clear()
 
+        # Каждый браузер запускается в ОТДЕЛЬНОМ процессе (spawn)
+        # Это обеспечивает полную изоляцию: отдельный браузер, отдельная память, отдельный asyncio loop
         ctx = get_context("spawn")
         out_queue = ctx.Queue()
         worker_process = ctx.Process(
             target=run_open_instagram_worker,
             args=(out_queue, account),
         )
-        worker_process.start()
+        worker_process.start()  # Запускаем новый процесс для этого браузера
 
         # Создаём reader thread для этого браузера
         reader_thread = QueueReaderThread(out_queue, worker_process)
@@ -499,12 +541,20 @@ class ModernGUI(QMainWindow):
 
     def update_browsers_list(self):
         """Обновляет список открытых браузеров."""
+        # Обновляем список браузеров с сессиями
         self.open_browsers_list.clear()
         for browser_info in self.open_browsers:
             account = browser_info["account"]
             process = browser_info["process"]
             status = "🟢 Работает" if process.is_alive() else "🔴 Закрыт"
             self.open_browsers_list.addItem(f"{status} - {account}")
+        
+        # Обновляем список антидетект браузеров
+        self.antidetect_browsers_list.clear()
+        for i, browser_info in enumerate(self.antidetect_browsers):
+            process = browser_info["process"]
+            status = "🟢 Работает" if process.is_alive() else "🔴 Закрыт"
+            self.antidetect_browsers_list.addItem(f"{status} - Браузер #{i+1}")
 
     def update_open_instagram_status(self, message, account):
         """Обновляет статус для конкретного браузера."""
@@ -523,6 +573,61 @@ class ModernGUI(QMainWindow):
         # Удаляем браузер из списка при ошибке
         self.open_browsers = [
             b for b in self.open_browsers if b["account"] != account
+        ]
+        self.update_browsers_list()
+        self.update_status("Готов к работе")
+
+    def open_antidetect_browser_process(self):
+        """Обработчик для открытия антидетект браузера."""
+        # Каждый антидетект браузер запускается в ОТДЕЛЬНОМ процессе (spawn)
+        # Без куков, без сессий - полностью новый браузер
+        ctx = get_context("spawn")
+        out_queue = ctx.Queue()
+        worker_process = ctx.Process(
+            target=run_antidetect_browser_worker,
+            args=(out_queue,),
+        )
+        worker_process.start()
+
+        # Создаём reader thread для этого браузера
+        reader_thread = QueueReaderThread(out_queue, worker_process)
+        reader_thread.status_update.connect(
+            lambda msg: self.update_status(f"[Антидетект] {msg}")
+        )
+        reader_thread.finished.connect(
+            lambda: self.on_antidetect_browser_finished()
+        )
+        reader_thread.error.connect(
+            lambda err: self.show_antidetect_browser_error(err)
+        )
+        reader_thread.start()
+
+        # Сохраняем информацию о браузере
+        browser_info = {
+            "process": worker_process,
+            "out_queue": out_queue,
+            "reader_thread": reader_thread,
+        }
+        self.antidetect_browsers.append(browser_info)
+
+        # Обновляем список открытых браузеров
+        self.update_browsers_list()
+
+        self.update_status("Запуск антидетект браузера...")
+
+    def on_antidetect_browser_finished(self):
+        """Обработчик завершения открытия антидетект браузера."""
+        self.update_status("Антидетект браузер открыт (без куков и сессий)")
+        self.update_browsers_list()
+
+    def show_antidetect_browser_error(self, error_message):
+        """Обработчик ошибки при открытии антидетект браузера."""
+        QMessageBox.critical(
+            self, "Ошибка", f"Ошибка при открытии антидетект браузера:\n{error_message}"
+        )
+        # Удаляем браузер из списка при ошибке (удаляем первый неработающий)
+        self.antidetect_browsers = [
+            b for b in self.antidetect_browsers if b["process"].is_alive()
         ]
         self.update_browsers_list()
         self.update_status("Готов к работе")

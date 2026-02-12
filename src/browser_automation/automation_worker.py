@@ -144,10 +144,56 @@ def run_worker(in_queue, out_queue, description, video_files, account_name):
         out_queue.put(("done",))
 
 
+async def _run_antidetect_browser_async(out_queue):
+    """Запускает антидетект браузер без куков и сессий."""
+    print("🚀 Открываю антидетект браузер...")
+    
+    # Создаём новый браузер без загрузки куков
+    camoufox_cm = AsyncCamoufox(headless=False, humanize=True)
+    browser = await camoufox_cm.__aenter__()
+    page = await browser.new_page()
+    await page.set_extra_http_headers(
+        {"Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8"}
+    )
+    
+    # Открываем главную страницу Instagram (без логина)
+    print("📱 Открываю Instagram...")
+    await page.goto(
+        "https://www.instagram.com/",
+        wait_until="domcontentloaded",
+        timeout=60000
+    )
+    
+    out_queue.put(("status", "Антидетект браузер открыт (без куков и сессий)"))
+    out_queue.put(("finished", True))
+    
+    # Браузер остаётся открытым до закрытия пользователем
+    # Просто ждём, пока браузер не закроется
+    while True:
+        try:
+            if not browser or not browser.is_connected():
+                print("⚠️ Браузер закрыт.")
+                break
+            await asyncio.sleep(5)  # Проверяем каждые 5 секунд
+        except Exception as e:
+            print(f"⚠️ Ошибка: {e}")
+            break
+
+
 def run_open_instagram_worker(out_queue, account_name):
     """Воркер для открытия Instagram и сохранения сессии."""
     try:
         asyncio.run(_run_open_instagram_async(out_queue, account_name))
+    except Exception as e:
+        out_queue.put(("error", f"{str(e)}\n\n{traceback.format_exc()}"))
+    finally:
+        out_queue.put(("done",))
+
+
+def run_antidetect_browser_worker(out_queue):
+    """Воркер для открытия антидетект браузера без куков."""
+    try:
+        asyncio.run(_run_antidetect_browser_async(out_queue))
     except Exception as e:
         out_queue.put(("error", f"{str(e)}\n\n{traceback.format_exc()}"))
     finally:

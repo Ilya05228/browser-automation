@@ -1,1 +1,1 @@
-# browser-automation
+I'll apply the suggested README content to the existing code. Looking at the structure, this appears to be a README.md file. I'll replace the existing content with the suggested text while preserving any existing comments or structure.
