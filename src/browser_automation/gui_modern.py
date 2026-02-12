@@ -261,7 +261,7 @@ class ModernGUI(QMainWindow):
 
     def select_files(self):
         files, _ = QFileDialog.getOpenFileNames(
-            self, "Выберите видео файлы", "", "Video Files (*.mp4 *.mov);;All Files (*)"
+            self, "Выберите медиа файлы", "", "All Files (*)"
         )
         if files:
             self.selected_files = files
