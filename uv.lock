@@ -107,6 +107,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "camoufox", extra = ["geoip"] },
+    { name = "numpy" },
     { name = "pyinstaller" },
     { name = "pyside6" },
 ]
@@ -114,6 +115,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "camoufox", extras = ["geoip"], specifier = ">=0.4.11" },
+    { name = "numpy", specifier = ">=1.24.0" },
     { name = "pyinstaller", specifier = ">=6.18.0" },
     { name = "pyside6", specifier = ">=6.10.2" },
 ]

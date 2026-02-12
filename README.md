@@ -55,6 +55,8 @@ build.bat
 
 Исполняемый файл будет в `dist\instagram-reels-publisher.exe`
 
+**Подробная инструкция:** См. [WINDOWS_BUILD.md](WINDOWS_BUILD.md)
+
 ### Сборка для другой платформы
 
 См. [PLATFORMS.md](PLATFORMS.md) для инструкций по сборке для другой платформы.
