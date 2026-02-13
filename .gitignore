@@ -1,5 +1,5 @@
 ./local_files
-
+profiles/
 
 # Python
 __pycache__/
