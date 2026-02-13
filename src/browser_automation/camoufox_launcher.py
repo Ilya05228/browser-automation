@@ -8,6 +8,9 @@ from camoufox import DefaultAddons
 from camoufox.sync_api import Camoufox
 from playwright.sync_api import Browser
 
+# Язык браузера (Accept-Language), по умолчанию всегда
+DEFAULT_ACCEPT_LANGUAGE = "ru-BY,ru-RU"
+
 from browser_automation.proxy import VlessProxy
 from browser_automation.value_objects import CamoufoxSettings, Profile, ProxyConfig
 
@@ -81,7 +84,10 @@ class CamoufoxLauncher:
 
         camoufox = Camoufox(**kwargs)
         self._browser = camoufox.start()
-        page = self._browser.new_page()
+        context = self._browser.new_context(
+            extra_http_headers={"Accept-Language": DEFAULT_ACCEPT_LANGUAGE}
+        )
+        page = context.new_page()
         page.goto("about:blank")
         # Заголовок окна = название профиля
         if self._profile and self._profile.name:
