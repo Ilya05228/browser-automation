@@ -1,3 +1,6 @@
+./local_files
+
+
 # Python
 __pycache__/
 *.py[cod]
@@ -44,3 +47,4 @@ Thumbs.db
 # Project specific
 cache/sessions.json
 *.log
+.env
