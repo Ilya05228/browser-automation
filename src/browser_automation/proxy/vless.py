@@ -2,6 +2,7 @@
 
 import json
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -9,6 +10,18 @@ from pathlib import Path
 
 from browser_automation.proxy.base import ProxyBase
 from browser_automation.value_objects import ProxyConfig, VlessString
+
+
+def find_free_port(start: int = 10808) -> int:
+    """Ищет свободный порт начиная с start. Если занят — +1, +2, … пока не найдёт."""
+    for port in range(start, start + 1000):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(f"Не найден свободный порт в диапазоне {start}-{start+1000}")
 
 
 def _find_xray() -> str:
@@ -137,6 +150,9 @@ class VlessProxy(ProxyBase):
     def start(self) -> ProxyConfig:
         if self._process is not None:
             return ProxyConfig("127.0.0.1", self._local_port)
+
+        # Ищем свободный порт: start, start+1, … пока не найдём
+        self._local_port = find_free_port(max(10808, self._local_port))
 
         resolved = shutil.which(self._xray_path)
         if not resolved and Path(self._xray_path).exists():

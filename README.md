@@ -35,6 +35,7 @@ uv run browser-automation
   - **Ubuntu/Linux:** `apt install xray` или [официальный скрипт](https://github.com/XTLS/Xray-install)
 
 **Установка Xray:**
+
 - [Загрузка и установка Xray](https://xtls.github.io/ru/document/install.html)
 - [Релизы Xray-core](https://github.com/XTLS/Xray-core/releases)
 

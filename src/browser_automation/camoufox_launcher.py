@@ -53,7 +53,12 @@ class CamoufoxLauncher:
 
         if self._profile and self._profile.vless_raw and not proxy_config:
             try:
-                vless = VlessProxy(self._profile.vless_raw)
+                start_port = (
+                    self._profile.proxy_config.port
+                    if self._profile.proxy_config
+                    else 10808
+                )
+                vless = VlessProxy(self._profile.vless_raw, local_port=start_port)
                 self._proxy_process = vless
                 proxy_config = vless.start()
                 self._proxy_config = proxy_config

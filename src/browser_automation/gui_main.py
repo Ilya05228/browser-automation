@@ -55,6 +55,23 @@ class LaunchWorker(QThread):
             self.error.emit(self.profile.name, str(e))
 
 
+class StopWorker(QThread):
+    """Завершение браузера в отдельном потоке — browser.close() не блокирует UI."""
+
+    finished = Signal()
+
+    def __init__(self, launcher: CamoufoxLauncher) -> None:
+        super().__init__()
+        self._launcher = launcher
+
+    def run(self) -> None:
+        try:
+            self._launcher.stop()
+        except Exception:
+            pass
+        self.finished.emit()
+
+
 class ProfileEditDialog(QDialog):
     """Диалог создания/редактирования профиля."""
 
@@ -77,16 +94,20 @@ class ProfileEditDialog(QDialog):
 
         self.vless_edit = QTextEdit()
         self.vless_edit.setPlaceholderText(
-            "Оставьте пустым — прокси не будет. Если укажете VLESS, используется 127.0.0.1:10808 автоматически."
+            "Оставьте пустым — без прокси. Если указать VLESS — прокси 127.0.0.1, порт подберётся свободный (10808, 10809, …)."
         )
         self.vless_edit.setMaximumHeight(80)
         form.addRow("VLESS:", self.vless_edit)
 
         self.proxy_host = QLineEdit()
-        self.proxy_host.setPlaceholderText("Оставьте пустым — при VLESS подставится 127.0.0.1")
+        self.proxy_host.setPlaceholderText(
+            "Только без VLESS: укажите host. С VLESS — оставьте пустым (будет 127.0.0.1)."
+        )
         form.addRow("Прокси host:", self.proxy_host)
         self.proxy_port = QLineEdit()
-        self.proxy_port.setPlaceholderText("Оставьте пустым — при VLESS подставится 10808")
+        self.proxy_port.setPlaceholderText(
+            "Без VLESS: укажите port. С VLESS: пусто — с 10808; или стартовый порт для поиска свободного."
+        )
         form.addRow("Прокси port:", self.proxy_port)
 
         layout.addLayout(form)
@@ -110,13 +131,26 @@ class ProfileEditDialog(QDialog):
         name = self.name_edit.text().strip() or "Без имени"
         vless = self.vless_edit.toPlainText().strip() or None
         proxy = None
-        if not vless:
-            try:
-                host = self.proxy_host.text().strip() or "127.0.0.1"
-                port = int(self.proxy_port.text().strip() or "10808")
-                proxy = ProxyConfig(host=host, port=port)
-            except ValueError:
-                pass
+        host = self.proxy_host.text().strip()
+        port_str = self.proxy_port.text().strip()
+        if vless:
+            # VLESS задан: port пусто → 10808; иначе стартовый порт для поиска свободного
+            if port_str:
+                try:
+                    proxy = ProxyConfig(host="127.0.0.1", port=int(port_str))
+                except ValueError:
+                    proxy = ProxyConfig(host="127.0.0.1", port=10808)
+            # port пусто → proxy=None, лаунчер возьмёт 10808 по умолчанию
+        else:
+            # VLESS пустой: host/port пусто → без прокси; иначе ручной прокси
+            if host or port_str:
+                try:
+                    proxy = ProxyConfig(
+                        host=host or "127.0.0.1",
+                        port=int(port_str) if port_str else 10808,
+                    )
+                except ValueError:
+                    pass
         return Profile(
             id=self._profile.id if self._profile else "",
             name=name,
@@ -137,6 +171,7 @@ class MainWindow(QMainWindow):
         self._repo = ProfileRepository(profiles_path)
         self._launchers: dict[str, CamoufoxLauncher] = {}
         self._launch_workers: list[LaunchWorker] = []
+        self._stop_workers: list[StopWorker] = []
 
         # Таймер: проверка, не закрыл ли пользователь браузер вручную
         self._status_timer = QTimer(self)
@@ -431,13 +466,20 @@ class MainWindow(QMainWindow):
         for pid in ids:
             launcher = self._launchers.pop(pid, None)
             if launcher:
-                launcher.stop()
+                worker = StopWorker(launcher)
+                worker.finished.connect(self._on_stop_worker_finished)
+                self._stop_workers.append(worker)
+                worker.start()
                 p = self._repo.get(pid)
                 if p:
                     stopped.append(p.name)
         self._refresh_table()
         if stopped:
-            QMessageBox.information(self, "Завершение", f"Завершено: {', '.join(stopped)}")
+            QMessageBox.information(self, "Завершение", f"Завершение: {', '.join(stopped)}")
+
+    def _on_stop_worker_finished(self) -> None:
+        # Удаляем завершённые воркеры
+        self._stop_workers[:] = [w for w in self._stop_workers if w.isRunning()]
 
     def closeEvent(self, event) -> None:
         self._status_timer.stop()
