@@ -28,6 +28,20 @@ GUI для управления профилями Camoufox с поддержк�
 - [Загрузка и установка Xray](https://xtls.github.io/ru/document/install.html)
 - [Релизы Xray-core](https://github.com/XTLS/Xray-core/releases)
 
+## Сборка (PyInstaller)
+
+**Linux:**
+```bash
+pyinstaller --name browser-automation -F --paths=src --noconfirm src/browser_automation/main.py
+```
+
+**Windows** (exe без консоли):
+```bash
+pyinstaller --name browser-automation -F --paths=src --noconfirm -w src/browser_automation/main.py
+```
+
+Результат: `dist/browser-automation` (Linux) или `dist/browser-automation.exe` (Windows).
+
 ## Полезное
 
 - https://amiunique.org/
