@@ -36,6 +36,7 @@ from browser_automation.value_objects import (
 
 DEFAULT_PROFILES_PATH = Path.home() / ".config" / "browser-automation" / "profiles.json"
 
+
 class LaunchWorker(QThread):
     """Запуск Camoufox в отдельном потоке — избегает 'Sync API inside asyncio loop'."""
 
@@ -66,7 +67,9 @@ class LaunchWorker(QThread):
             self._launcher = CamoufoxLauncher(profile=self.profile, data_dir=data_dir)
             self._launcher.start()
             self.finished.emit(self.instance_id, self.profile_id, self._launcher)
-            self.stop_requested.connect(self._do_stop, Qt.ConnectionType.QueuedConnection)
+            self.stop_requested.connect(
+                self._do_stop, Qt.ConnectionType.QueuedConnection
+            )
             self._check_timer = QTimer()
             self._check_timer.timeout.connect(self._check_browser_closed)
             self._check_timer.start(2000)
@@ -91,8 +94,6 @@ class LaunchWorker(QThread):
         if self._launcher:
             self._launcher.stop()
         self.quit()
-
-
 
 
 class ProfileEditDialog(QDialog):

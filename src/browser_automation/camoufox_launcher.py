@@ -125,13 +125,18 @@ class CamoufoxLauncher:
 
     def stop(self) -> None:
         """Останавливает браузер и VLESS/xray-прокси (если был запущен)."""
+        if self._context:
+            try:
+                self._context.close()
+            except Exception:
+                pass
+            self._context = None
         if self._browser:
             try:
                 self._browser.close()
             except Exception:
                 pass
             self._browser = None
-        self._context = None
         if self._proxy_process:
             self._proxy_process.stop()
             self._proxy_process = None
