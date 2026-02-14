@@ -60,7 +60,6 @@ pyinstaller browser-automation.spec --noconfirm
 
 ## задачи
 
-- Структурировать код
 - Авто загрузка xray
 - Починка запуска на Windows
 - Импорт экспорт куков и настроек.
