@@ -52,7 +52,6 @@ class ProfileRepository:
             p = Profile(
                 id=str(uuid.uuid4()),
                 name=p.name,
-                cookies=p.cookies,
                 proxy_config=p.proxy_config,
                 vless_raw=p.vless_raw,
                 camoufox_settings=p.camoufox_settings,
@@ -89,7 +88,6 @@ class ProfileRepository:
         copy = Profile(
             id="",
             name=new_name or f"{p.name} (копия)",
-            cookies=p.cookies,
             proxy_config=p.proxy_config,
             vless_raw=p.vless_raw,
             camoufox_settings=p.camoufox_settings,
@@ -110,7 +108,6 @@ class ProfileRepository:
         p = Profile(
             id="",
             name=p.name,
-            cookies=p.cookies,
             proxy_config=p.proxy_config,
             vless_raw=p.vless_raw,
             camoufox_settings=p.camoufox_settings,

@@ -133,14 +133,12 @@ PROFILE_VERSION = 1
 @dataclass
 class Profile:
     """
-    Профиль: название, куки, прокси, настройки Camoufox.
-    cookies — список куков в формате Playwright (name, value, domain, path, ...).
-    version — версия схемы профиля для миграций.
+    Профиль: название, прокси, настройки.
+    Куки и localStorage хранятся в user_data_dir (persistent_context).
     """
 
     id: str
     name: str
-    cookies: list[dict[str, Any]] | None = None
     proxy_config: ProxyConfig | None = None
     vless_raw: str | None = None
     camoufox_settings: CamoufoxSettings | None = None
@@ -151,7 +149,6 @@ class Profile:
             "version": self.version,
             "id": self.id,
             "name": self.name,
-            "cookies": self.cookies if self.cookies is not None else [],
         }
         if self.proxy_config:
             d["proxy"] = {
@@ -191,19 +188,11 @@ class Profile:
                 enable_cache=c.get("enable_cache", True),
                 locale=c.get("locale", DEFAULT_LOCALE),
             )
-        raw_cookies = d.get("cookies")
-        cookies: list[dict[str, Any]] | None = None
-        if isinstance(raw_cookies, list):
-            cookies = raw_cookies
-        elif raw_cookies:
-            cookies = []
-
         version = int(d.get("version", PROFILE_VERSION))
 
         return cls(
             id=d.get("id", ""),
             name=d.get("name", "Unnamed"),
-            cookies=cookies,
             proxy_config=proxy,
             vless_raw=d.get("vless_raw"),
             camoufox_settings=camo,
