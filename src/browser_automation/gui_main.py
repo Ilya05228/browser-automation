@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QMetaObject, QThread, QTimer, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -35,32 +35,47 @@ from browser_automation.value_objects import (
 
 DEFAULT_PROFILES_PATH = Path.home() / ".config" / "browser-automation" / "profiles.json"
 
-STATUS_RUNNING = "запущен"
-STATUS_STOPPED = "не запущен"
-
-
 class LaunchWorker(QThread):
     """Запуск Camoufox в отдельном потоке — избегает 'Sync API inside asyncio loop'."""
 
     finished = Signal(str, object)  # profile_id, launcher
     error = Signal(str, str)
     cookies_ready = Signal(str, list)  # profile_id, cookies
+    browser_closed = Signal(str)  # profile_id — браузер закрыт вручную
+    fetch_requested = Signal()  # запрос куков из главного потока
+    stop_requested = Signal()  # запрос остановки
 
     def __init__(self, profile_id: str, profile: Profile) -> None:
         super().__init__()
         self.profile_id = profile_id
         self.profile = profile
         self._launcher: CamoufoxLauncher | None = None
+        self._check_timer: QTimer | None = None
 
     def run(self) -> None:
         try:
             self._launcher = CamoufoxLauncher(profile=self.profile)
             self._launcher.start()
             self.finished.emit(self.profile_id, self._launcher)
+            self.fetch_requested.connect(self.fetch_cookies, Qt.ConnectionType.QueuedConnection)
+            self.stop_requested.connect(self.fetch_and_stop, Qt.ConnectionType.QueuedConnection)
+            self._check_timer = QTimer()
+            self._check_timer.timeout.connect(self._check_browser_closed)
+            self._check_timer.start(2000)
         except Exception as e:
             self.error.emit(self.profile.name, str(e))
             return
-        self.exec()  # Держим поток живым — cookie fetch в том же потоке
+        self.exec()
+
+    def _check_browser_closed(self) -> None:
+        """В потоке воркера — Playwright требует тот же поток."""
+        if self._launcher and not self._launcher.is_running():
+            if self._check_timer:
+                self._check_timer.stop()
+            cookies = self._launcher.get_all_browser_cookies()
+            if cookies:
+                self.cookies_ready.emit(self.profile_id, cookies)
+            self.browser_closed.emit(self.profile_id)
 
     def fetch_cookies(self) -> None:
         """Вызывается по таймеру — в потоке воркера."""
@@ -71,6 +86,8 @@ class LaunchWorker(QThread):
 
     def fetch_and_stop(self) -> None:
         """Вызвать перед остановкой — куки + stop в потоке воркера."""
+        if self._check_timer:
+            self._check_timer.stop()
         if self._launcher:
             cookies = self._launcher.get_all_browser_cookies()
             self.cookies_ready.emit(self.profile_id, cookies)
@@ -186,10 +203,6 @@ class MainWindow(QMainWindow):
         self._workers: dict[str, LaunchWorker] = {}
         self._launch_workers: list[LaunchWorker] = []
 
-        # Таймер: проверка, не закрыл ли пользователь браузер вручную
-        self._status_timer = QTimer(self)
-        self._status_timer.timeout.connect(self._check_browsers_closed)
-        self._status_timer.start(2000)  # каждые 2 сек
         # Периодическое сохранение куков (при ручном закрытии браузера)
         self._cookies_timer = QTimer(self)
         self._cookies_timer.timeout.connect(self._save_running_cookies)
@@ -201,8 +214,8 @@ class MainWindow(QMainWindow):
 
         # Таблица
         self.table = QTableWidget()
-        self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["Название", "ID", "Статус"])
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(["Название", "ID"])
         self.table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch
         )
@@ -262,12 +275,6 @@ class MainWindow(QMainWindow):
         self._launch_btn = launch_btn
         panel.addWidget(launch_btn)
 
-        stop_btn = QPushButton("⏹️ Завершить")
-        stop_btn.clicked.connect(self._stop_selected)
-        stop_btn.setStyleSheet("background: #c62828; color: white;")
-        self._stop_btn = stop_btn
-        panel.addWidget(stop_btn)
-
         layout.addLayout(panel)
         self._refresh_table()
         self._on_selection_changed()
@@ -278,20 +285,18 @@ class MainWindow(QMainWindow):
             row = self.table.rowCount()
             self.table.insertRow(row)
             self.table.setItem(row, 0, QTableWidgetItem(p.name))
-            self.table.setItem(row, 1, QTableWidgetItem(p.id[:12] + "…"))
-            status = STATUS_RUNNING if p.id in self._launchers else STATUS_STOPPED
-            status_item = QTableWidgetItem(status)
-            status_item.setData(Qt.ItemDataRole.UserRole, p.id)
-            self.table.setItem(row, 2, status_item)
+            id_item = QTableWidgetItem(p.id[:12] + "…")
+            id_item.setData(Qt.ItemDataRole.UserRole, p.id)
+            self.table.setItem(row, 1, id_item)
             self.table.setRowHeight(row, 28)
 
     def _selected_ids(self) -> list[str]:
         ids = []
         for item in self.table.selectedItems():
             row = item.row()
-            status_cell = self.table.item(row, 2)
-            if status_cell:
-                pid = status_cell.data(Qt.ItemDataRole.UserRole)
+            id_cell = self.table.item(row, 1)
+            if id_cell:
+                pid = id_cell.data(Qt.ItemDataRole.UserRole)
                 if pid and pid not in ids:
                     ids.append(pid)
         return ids
@@ -306,12 +311,11 @@ class MainWindow(QMainWindow):
         self._export_btn.setEnabled(has_sel)
         self._delete_btn.setEnabled(has_sel)
         self._launch_btn.setEnabled(has_sel)
-        self._stop_btn.setEnabled(has_sel)
 
     def _on_cell_double_clicked(self, row: int, _col: int) -> None:
-        status_cell = self.table.item(row, 2)
-        if status_cell:
-            pid = status_cell.data(Qt.ItemDataRole.UserRole)
+        id_cell = self.table.item(row, 1)
+        if id_cell:
+            pid = id_cell.data(Qt.ItemDataRole.UserRole)
             if pid:
                 self._edit_profile(pid)
 
@@ -433,20 +437,12 @@ class MainWindow(QMainWindow):
         ids = self._selected_ids()
         if not ids:
             return
-        running = [pid for pid in ids if pid in self._launchers]
-        if running:
-            QMessageBox.warning(
-                self,
-                "Удаление",
-                "Сначала завершите запущенные профили.",
-            )
-            return
         names = [self._repo.get(pid).name for pid in ids if self._repo.get(pid)]
         if (
             QMessageBox.question(
                 self,
                 "Удалить?",
-                f"Удалить {len(ids)} профиль(ей)?\n"
+                f"Удалить {len(ids)} профиль(ей)? Браузеры будут закрыты.\n"
                 + ", ".join(names[:5])
                 + (" …" if len(names) > 5 else ""),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -455,19 +451,27 @@ class MainWindow(QMainWindow):
             != QMessageBox.StandardButton.Yes
         ):
             return
+        workers_to_wait = []
+        for pid in ids:
+            launcher = self._launchers.pop(pid, None)
+            worker = self._workers.pop(pid, None)
+            if worker and launcher:
+                worker.cookies_ready.connect(self._on_cookies_ready)
+                worker.stop_requested.emit()
+                workers_to_wait.append(worker)
+            elif launcher:
+                launcher.stop()
+        for w in workers_to_wait:
+            w.wait(5000)
         for pid in ids:
             self._repo.delete(pid)
         self._refresh_table()
         QMessageBox.information(self, "Готово", "Профили удалены.")
 
     def _save_running_cookies(self) -> None:
-        """Сохраняет куки — запрашивает у воркера (в его потоке)."""
-        for pid, worker in self._workers.items():
-            QMetaObject.invokeMethod(
-                worker,
-                "fetch_cookies",
-                Qt.ConnectionType.QueuedConnection,
-            )
+        """Сохраняет куки — сигнал воркеру (выполнится в его потоке)."""
+        for worker in self._workers.values():
+            worker.fetch_requested.emit()
 
     def _on_cookies_ready(self, profile_id: str, cookies: list) -> None:
         """Получены куки от воркера — сохраняем в профиль."""
@@ -484,18 +488,6 @@ class MainWindow(QMainWindow):
             )
             self._repo.update(updated)
 
-    def _check_browsers_closed(self) -> None:
-        """Проверяет, не закрыл ли пользователь браузер вручную."""
-        to_remove = []
-        for pid, launcher in self._launchers.items():
-            if not launcher.is_running():
-                to_remove.append(pid)
-        for pid in to_remove:
-            self._launchers.pop(pid, None)
-            self._workers.pop(pid, None)
-        if to_remove:
-            self._refresh_table()
-
     def _launch_selected(self) -> None:
         ids = self._selected_ids()
         if not ids:
@@ -510,6 +502,7 @@ class MainWindow(QMainWindow):
             worker.finished.connect(self._on_launch_finished)
             worker.error.connect(self._on_launch_error)
             worker.cookies_ready.connect(self._on_cookies_ready)
+            worker.browser_closed.connect(self._on_browser_closed)
             self._launch_workers.append(worker)
             worker.start()
 
@@ -525,32 +518,18 @@ class MainWindow(QMainWindow):
         name = p.name if p else profile_id
         self.statusBar().showMessage(f"Браузер запущен: {name}", 3000)
 
+    def _on_browser_closed(self, profile_id: str) -> None:
+        """Браузер закрыт вручную."""
+        self._launchers.pop(profile_id, None)
+        self._workers.pop(profile_id, None)
+
     def _on_launch_error(self, profile_name: str, error_msg: str) -> None:
         worker = self.sender()
         if isinstance(worker, LaunchWorker) and worker in self._launch_workers:
             self._launch_workers.remove(worker)
         QMessageBox.critical(self, "Ошибка запуска", f"{profile_name}: {error_msg}")
 
-    def _stop_selected(self) -> None:
-        ids = self._selected_ids()
-        if not ids:
-            return
-        for pid in ids:
-            launcher = self._launchers.pop(pid, None)
-            worker = self._workers.pop(pid, None)
-            if worker and launcher:
-                worker.cookies_ready.connect(self._on_cookies_ready)
-                QMetaObject.invokeMethod(
-                    worker,
-                    "fetch_and_stop",
-                    Qt.ConnectionType.QueuedConnection,
-                )
-            elif launcher:
-                launcher.stop()
-        self._refresh_table()
-
     def closeEvent(self, event) -> None:
-        self._status_timer.stop()
         self._cookies_timer.stop()
         workers_to_wait = []
         for pid in list(self._launchers.keys()):
@@ -558,11 +537,7 @@ class MainWindow(QMainWindow):
             worker = self._workers.get(pid)
             if worker and launcher:
                 worker.cookies_ready.connect(self._on_cookies_ready)
-                QMetaObject.invokeMethod(
-                    worker,
-                    "fetch_and_stop",
-                    Qt.ConnectionType.QueuedConnection,
-                )
+                worker.stop_requested.emit()
                 workers_to_wait.append(worker)
         for w in workers_to_wait:
             w.wait(5000)
