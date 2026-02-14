@@ -27,3 +27,7 @@ GUI для управления профилями Camoufox с поддержк�
 
 - [Загрузка и установка Xray](https://xtls.github.io/ru/document/install.html)
 - [Релизы Xray-core](https://github.com/XTLS/Xray-core/releases)
+
+## Полезное
+
+- https://amiunique.org/
