@@ -1,6 +1,7 @@
 """PySide6 GUI: профили в таблице, CRUD, экспорт/импорт, статус запуска."""
 
 import json
+import uuid
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
@@ -38,15 +39,16 @@ DEFAULT_PROFILES_PATH = Path.home() / ".config" / "browser-automation" / "profil
 class LaunchWorker(QThread):
     """Запуск Camoufox в отдельном потоке — избегает 'Sync API inside asyncio loop'."""
 
-    finished = Signal(str, object)  # profile_id, launcher
+    finished = Signal(str, str, object)  # instance_id, profile_id, launcher
     error = Signal(str, str)
     cookies_ready = Signal(str, list)  # profile_id, cookies
-    browser_closed = Signal(str)  # profile_id — браузер закрыт вручную
-    fetch_requested = Signal()  # запрос куков из главного потока
-    stop_requested = Signal()  # запрос остановки
+    browser_closed = Signal(str)  # instance_id — браузер закрыт
+    fetch_requested = Signal()
+    stop_requested = Signal()
 
-    def __init__(self, profile_id: str, profile: Profile) -> None:
+    def __init__(self, instance_id: str, profile_id: str, profile: Profile) -> None:
         super().__init__()
+        self.instance_id = instance_id
         self.profile_id = profile_id
         self.profile = profile
         self._launcher: CamoufoxLauncher | None = None
@@ -56,7 +58,7 @@ class LaunchWorker(QThread):
         try:
             self._launcher = CamoufoxLauncher(profile=self.profile)
             self._launcher.start()
-            self.finished.emit(self.profile_id, self._launcher)
+            self.finished.emit(self.instance_id, self.profile_id, self._launcher)
             self.fetch_requested.connect(self.fetch_cookies, Qt.ConnectionType.QueuedConnection)
             self.stop_requested.connect(self.fetch_and_stop, Qt.ConnectionType.QueuedConnection)
             self._check_timer = QTimer()
@@ -68,14 +70,19 @@ class LaunchWorker(QThread):
         self.exec()
 
     def _check_browser_closed(self) -> None:
-        """В потоке воркера — Playwright требует тот же поток."""
+        """Браузер закрыт вручную — куки, stop прокси, quit воркера."""
         if self._launcher and not self._launcher.is_running():
             if self._check_timer:
                 self._check_timer.stop()
-            cookies = self._launcher.get_all_browser_cookies()
-            if cookies:
-                self.cookies_ready.emit(self.profile_id, cookies)
-            self.browser_closed.emit(self.profile_id)
+            try:
+                cookies = self._launcher.get_all_browser_cookies()
+                if cookies:
+                    self.cookies_ready.emit(self.profile_id, cookies)
+            except Exception:
+                pass
+            self._launcher.stop()
+            self.browser_closed.emit(self.instance_id)
+            self.quit()
 
     def fetch_cookies(self) -> None:
         """Вызывается по таймеру — в потоке воркера."""
@@ -199,14 +206,14 @@ class MainWindow(QMainWindow):
         self.resize(800, 550)
         self._profiles_path = Path(profiles_path)
         self._repo = ProfileRepository(self._profiles_path)
-        self._launchers: dict[str, CamoufoxLauncher] = {}
-        self._workers: dict[str, LaunchWorker] = {}
+        self._launchers: dict[str, CamoufoxLauncher] = {}  # instance_id -> launcher
+        self._workers: dict[str, LaunchWorker] = {}  # instance_id -> worker
         self._launch_workers: list[LaunchWorker] = []
 
         # Периодическое сохранение куков (при ручном закрытии браузера)
         self._cookies_timer = QTimer(self)
         self._cookies_timer.timeout.connect(self._save_running_cookies)
-        self._cookies_timer.start(15_000)  # каждые 15 сек — куки в профиль JSON
+        self._cookies_timer.start(5_000)  # каждые 5 сек — куки в профиль JSON
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -452,15 +459,16 @@ class MainWindow(QMainWindow):
         ):
             return
         workers_to_wait = []
-        for pid in ids:
-            launcher = self._launchers.pop(pid, None)
-            worker = self._workers.pop(pid, None)
-            if worker and launcher:
-                worker.cookies_ready.connect(self._on_cookies_ready)
-                worker.stop_requested.emit()
-                workers_to_wait.append(worker)
-            elif launcher:
-                launcher.stop()
+        for instance_id, worker in list(self._workers.items()):
+            if worker.profile_id in ids:
+                launcher = self._launchers.pop(instance_id, None)
+                self._workers.pop(instance_id, None)
+                if worker and launcher:
+                    worker.cookies_ready.connect(self._on_cookies_ready)
+                    worker.stop_requested.emit()
+                    workers_to_wait.append(worker)
+                elif launcher:
+                    launcher.stop()
         for w in workers_to_wait:
             w.wait(5000)
         for pid in ids:
@@ -493,12 +501,11 @@ class MainWindow(QMainWindow):
         if not ids:
             return
         for pid in ids:
-            if pid in self._launchers:
-                continue
             p = self._repo.get(pid)
             if not p:
                 continue
-            worker = LaunchWorker(pid, p)
+            instance_id = str(uuid.uuid4())
+            worker = LaunchWorker(instance_id, pid, p)
             worker.finished.connect(self._on_launch_finished)
             worker.error.connect(self._on_launch_error)
             worker.cookies_ready.connect(self._on_cookies_ready)
@@ -506,11 +513,13 @@ class MainWindow(QMainWindow):
             self._launch_workers.append(worker)
             worker.start()
 
-    def _on_launch_finished(self, profile_id: str, launcher: CamoufoxLauncher) -> None:
-        self._launchers[profile_id] = launcher
+    def _on_launch_finished(
+        self, instance_id: str, profile_id: str, launcher: CamoufoxLauncher
+    ) -> None:
+        self._launchers[instance_id] = launcher
         worker = self.sender()
         if isinstance(worker, LaunchWorker):
-            self._workers[profile_id] = worker
+            self._workers[instance_id] = worker
             if worker in self._launch_workers:
                 self._launch_workers.remove(worker)
         self._refresh_table()
@@ -518,10 +527,10 @@ class MainWindow(QMainWindow):
         name = p.name if p else profile_id
         self.statusBar().showMessage(f"Браузер запущен: {name}", 3000)
 
-    def _on_browser_closed(self, profile_id: str) -> None:
+    def _on_browser_closed(self, instance_id: str) -> None:
         """Браузер закрыт вручную."""
-        self._launchers.pop(profile_id, None)
-        self._workers.pop(profile_id, None)
+        self._launchers.pop(instance_id, None)
+        self._workers.pop(instance_id, None)
 
     def _on_launch_error(self, profile_name: str, error_msg: str) -> None:
         worker = self.sender()
@@ -532,9 +541,9 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         self._cookies_timer.stop()
         workers_to_wait = []
-        for pid in list(self._launchers.keys()):
-            launcher = self._launchers.get(pid)
-            worker = self._workers.get(pid)
+        for instance_id in list(self._launchers.keys()):
+            launcher = self._launchers.get(instance_id)
+            worker = self._workers.get(instance_id)
             if worker and launcher:
                 worker.cookies_ready.connect(self._on_cookies_ready)
                 worker.stop_requested.emit()
