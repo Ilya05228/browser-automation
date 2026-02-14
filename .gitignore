@@ -1,4 +1,6 @@
-./local_files
+local_files/
+!local_files/.gitkeep
+
 profiles/
 
 # Python

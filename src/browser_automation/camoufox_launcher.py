@@ -6,10 +6,7 @@ from typing import TYPE_CHECKING
 
 from camoufox import DefaultAddons
 from camoufox.sync_api import Camoufox
-from playwright.sync_api import Browser
-
-# Язык браузера (Accept-Language), по умолчанию всегда
-DEFAULT_ACCEPT_LANGUAGE = "ru-BY,ru-RU"
+from playwright.sync_api import Browser, BrowserContext
 
 from browser_automation.proxy import VlessProxy
 from browser_automation.value_objects import CamoufoxSettings, Profile, ProxyConfig
@@ -39,6 +36,7 @@ class CamoufoxLauncher:
             self._settings = profile.camoufox_settings
         self._data_dir = Path(data_dir) if data_dir else None
         self._browser: Browser | None = None
+        self._context: BrowserContext | None = None
         self._proxy_process: ProxyBase | None = None
         self._proxy_config: ProxyConfig | None = None
 
@@ -70,30 +68,59 @@ class CamoufoxLauncher:
 
         # headless=False — окно должно быть видимым
         kwargs: dict = {
-            "headless": self._settings.headless,  # по умолчанию False
+            "headless": self._settings.headless,
             "humanize": self._settings.humanize,
             "exclude_addons": [DefaultAddons.UBO] if self._settings.exclude_ublock else [],
+            "enable_cache": self._settings.enable_cache,
+            "locale": self._settings.locale,
         }
         if self._settings.window:
             kwargs["window"] = self._settings.window
-        if self._data_dir:
-            kwargs["user_data_dir"] = str(self._data_dir)
         if proxy_config:
             kwargs["proxy"] = proxy_config.to_playwright_proxy()
             kwargs["geoip"] = True  # устраняет LeakWarning, согласует гео/локаль с IP прокси
 
+        use_persistent = bool(self._data_dir)
+        if use_persistent:
+            kwargs["persistent_context"] = True
+            kwargs["user_data_dir"] = str(self._data_dir)
+
         camoufox = Camoufox(**kwargs)
-        self._browser = camoufox.start()
-        context = self._browser.new_context(
-            extra_http_headers={"Accept-Language": DEFAULT_ACCEPT_LANGUAGE}
-        )
-        page = context.new_page()
+        result = camoufox.start()
+
+        if use_persistent:
+            # persistent_context=True → start() возвращает BrowserContext (хранилище куков в user_data_dir)
+            self._context = result
+            self._browser = self._context.browser
+        else:
+            self._browser = result
+            self._context = self._browser.new_context(
+                extra_http_headers={"Accept-Language": self._settings.locale},
+                locale=self._settings.locale,
+            )
+        if self._profile and self._profile.cookies:
+            try:
+                self._context.add_cookies(self._profile.cookies)
+            except Exception:
+                pass
+
+        # persistent_context уже открывает страницу — используем её, чтобы не было 2 вкладок
+        page = self._context.pages[0] if self._context.pages else self._context.new_page()
         page.goto("about:blank")
         # Заголовок окна = название профиля
         if self._profile and self._profile.name:
             page.evaluate(f"document.title = {json.dumps(self._profile.name)}")
         page.bring_to_front()
         return self._browser
+
+    def get_all_browser_cookies(self) -> list[dict]:
+        """Возвращает куки из контекста (persistent и обычного)."""
+        if not self._context:
+            return []
+        try:
+            return self._context.cookies()
+        except Exception:
+            return []
 
     def is_running(self) -> bool:
         """Проверяет, подключён ли браузер (не закрыт ли вручную)."""
@@ -112,6 +139,7 @@ class CamoufoxLauncher:
             except Exception:
                 pass
             self._browser = None
+        self._context = None
         if self._proxy_process:
             self._proxy_process.stop()
             self._proxy_process = None

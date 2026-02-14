@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from browser_automation.camoufox_launcher import CamoufoxLauncher
 from browser_automation.profile_repository import ProfileRepository
-from browser_automation.value_objects import CamoufoxSettings, Profile, ProxyConfig
+from browser_automation.value_objects import PROFILE_VERSION, CamoufoxSettings, Profile, ProxyConfig
 
 
 DEFAULT_PROFILES_PATH = Path.home() / ".config" / "browser-automation" / "profiles.json"
@@ -157,6 +157,8 @@ class ProfileEditDialog(QDialog):
             vless_raw=vless,
             proxy_config=proxy,
             camoufox_settings=CamoufoxSettings(),
+            cookies=self._profile.cookies if self._profile else None,
+            version=getattr(self._profile, "version", PROFILE_VERSION) if self._profile else PROFILE_VERSION,
         )
 
 
@@ -168,7 +170,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Browser Automation — Профили")
         self.setMinimumSize(600, 450)
         self.resize(800, 550)
-        self._repo = ProfileRepository(profiles_path)
+        self._profiles_path = Path(profiles_path)
+        self._repo = ProfileRepository(self._profiles_path)
         self._launchers: dict[str, CamoufoxLauncher] = {}
         self._launch_workers: list[LaunchWorker] = []
         self._stop_workers: list[StopWorker] = []
@@ -177,6 +180,10 @@ class MainWindow(QMainWindow):
         self._status_timer = QTimer(self)
         self._status_timer.timeout.connect(self._check_browsers_closed)
         self._status_timer.start(2000)  # каждые 2 сек
+        # Периодическое сохранение куков (при ручном закрытии браузера)
+        self._cookies_timer = QTimer(self)
+        self._cookies_timer.timeout.connect(self._save_running_cookies)
+        self._cookies_timer.start(15_000)  # каждые 15 сек — куки в профиль JSON
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -320,6 +327,8 @@ class MainWindow(QMainWindow):
                 vless_raw=new_p.vless_raw,
                 proxy_config=new_p.proxy_config,
                 camoufox_settings=new_p.camoufox_settings,
+                cookies=p.cookies,
+                version=p.version,
             )
             self._repo.update(new_p)
             self._refresh_table()
@@ -332,11 +341,26 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "Готово", f"Скопировано как «{new_p.name}».")
         self._refresh_table()
 
+    def _export_profile_data(self, pid: str) -> dict | None:
+        """Экспорт профиля: если запущен — куки берём из браузера."""
+        p = self._repo.get(pid)
+        if not p:
+            return None
+        d = p.to_dict()
+        if pid in self._launchers:
+            cookies = self._launchers[pid].get_all_browser_cookies()
+            if cookies:
+                d["cookies"] = cookies
+        return d
+
     def _export_to_clipboard(self) -> None:
         ids = self._selected_ids()
         if not ids:
             return
-        data = [self._repo.export_profile(pid) for pid in ids]
+        data = [self._export_profile_data(pid) for pid in ids]
+        data = [d for d in data if d]
+        if not data:
+            return
         text = json.dumps(data, ensure_ascii=False, indent=2)
         QApplication.clipboard().setText(text)
         QMessageBox.information(
@@ -347,7 +371,10 @@ class MainWindow(QMainWindow):
         ids = self._selected_ids()
         if not ids:
             return
-        data = [self._repo.export_profile(pid) for pid in ids]
+        data = [self._export_profile_data(pid) for pid in ids]
+        data = [d for d in data if d]
+        if not data:
+            return
         path, _ = QFileDialog.getSaveFileName(self, "Экспорт", "", "JSON (*.json)")
         if not path:
             return
@@ -416,6 +443,25 @@ class MainWindow(QMainWindow):
         self._refresh_table()
         QMessageBox.information(self, "Готово", "Профили удалены.")
 
+    def _save_running_cookies(self) -> None:
+        """Сохраняет куки всех запущенных профилей (на случай ручного закрытия браузера)."""
+        for pid, launcher in self._launchers.items():
+            if not launcher.is_running():
+                continue
+            cookies = launcher.get_all_browser_cookies()
+            p = self._repo.get(pid)
+            if p and cookies:
+                updated = Profile(
+                    id=p.id,
+                    name=p.name,
+                    cookies=cookies,
+                    proxy_config=p.proxy_config,
+                    vless_raw=p.vless_raw,
+                    camoufox_settings=p.camoufox_settings,
+                    version=p.version,
+                )
+                self._repo.update(updated)
+
     def _check_browsers_closed(self) -> None:
         """Проверяет, не закрыл ли пользователь браузер вручную — обновляет статус в таблице."""
         to_remove = []
@@ -466,11 +512,23 @@ class MainWindow(QMainWindow):
         for pid in ids:
             launcher = self._launchers.pop(pid, None)
             if launcher:
+                cookies = launcher.get_all_browser_cookies()
+                p = self._repo.get(pid)
+                if p and cookies:
+                    updated = Profile(
+                        id=p.id,
+                        name=p.name,
+                        cookies=cookies,
+                        proxy_config=p.proxy_config,
+                        vless_raw=p.vless_raw,
+                        camoufox_settings=p.camoufox_settings,
+                        version=p.version,
+                    )
+                    self._repo.update(updated)
                 worker = StopWorker(launcher)
                 worker.finished.connect(self._on_stop_worker_finished)
                 self._stop_workers.append(worker)
                 worker.start()
-                p = self._repo.get(pid)
                 if p:
                     stopped.append(p.name)
         self._refresh_table()
@@ -483,8 +541,22 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self._status_timer.stop()
-        for launcher in self._launchers.values():
+        self._cookies_timer.stop()
+        for pid, launcher in list(self._launchers.items()):
             try:
+                cookies = launcher.get_all_browser_cookies()
+                p = self._repo.get(pid)
+                if p and cookies:
+                    updated = Profile(
+                        id=p.id,
+                        name=p.name,
+                        cookies=cookies,
+                        proxy_config=p.proxy_config,
+                        vless_raw=p.vless_raw,
+                        camoufox_settings=p.camoufox_settings,
+                        version=p.version,
+                    )
+                    self._repo.update(updated)
                 launcher.stop()
             except Exception:
                 pass

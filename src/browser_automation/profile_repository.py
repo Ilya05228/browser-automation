@@ -4,7 +4,7 @@ import json
 import uuid
 from pathlib import Path
 
-from browser_automation.value_objects import Profile
+from browser_automation.value_objects import PROFILE_VERSION, Profile
 
 
 class ProfileRepository:
@@ -56,6 +56,7 @@ class ProfileRepository:
                 proxy_config=p.proxy_config,
                 vless_raw=p.vless_raw,
                 camoufox_settings=p.camoufox_settings,
+                version=getattr(p, "version", PROFILE_VERSION),
             )
         items.append(p.to_dict())
         self._save(items)
@@ -92,6 +93,7 @@ class ProfileRepository:
             proxy_config=p.proxy_config,
             vless_raw=p.vless_raw,
             camoufox_settings=p.camoufox_settings,
+            version=getattr(p, "version", PROFILE_VERSION),
         )
         return self.create(copy)
 
@@ -112,5 +114,6 @@ class ProfileRepository:
             proxy_config=p.proxy_config,
             vless_raw=p.vless_raw,
             camoufox_settings=p.camoufox_settings,
+            version=getattr(p, "version", PROFILE_VERSION),
         )
         return self.create(p)
