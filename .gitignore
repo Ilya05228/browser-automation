@@ -33,6 +33,7 @@ env/
 
 # PyInstaller
 *.spec
+!browser-automation.spec
 *.manifest
 
 # IDE

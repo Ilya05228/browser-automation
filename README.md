@@ -23,10 +23,32 @@ GUI для управления профилями Camoufox с поддержк�
   - **Windows:** `xray.exe` — [скачать](https://github.com/XTLS/Xray-core/releases)
   - **Ubuntu/Linux:** `apt install xray` или [официальный скрипт](https://github.com/XTLS/Xray-install)
 
-**Установка Xray:**
+**Установка Xray на Windows:**
 
-- [Загрузка и установка Xray](https://xtls.github.io/ru/document/install.html)
-- [Релизы Xray-core](https://github.com/XTLS/Xray-core/releases)
+1. Скачайте `Xray-windows-64.zip` с [релизов](https://github.com/XTLS/Xray-core/releases) (раздел Assets)
+2. Распакуйте архив в папку, например `C:\xray`
+3. Добавьте путь в PATH:
+   - Параметры → Система → О сведении → Дополнительные параметры системы → Переменные среды
+   - В «Переменные среды пользователя» выберите `Path` → Изменить → Создать → вставьте `C:\xray`
+4. Либо через Scoop: `scoop install mochi` (если есть Scoop)
+
+- [Подробная инструкция](https://xtls.github.io/ru/document/install.html)
+
+## Сборка (PyInstaller)
+
+Используйте готовый `browser-automation.spec` (включает apify_fingerprint_datapoints, camoufox, language_tags):
+
+**Windows** — один exe без консоли:
+```bash
+pyinstaller browser-automation.spec --noconfirm
+```
+→ `dist/browser-automation.exe`
+
+**Linux:**
+```bash
+pyinstaller browser-automation.spec --noconfirm
+```
+→ `dist/browser-automation`
 
 ## Полезное
 
