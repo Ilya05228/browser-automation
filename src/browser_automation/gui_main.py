@@ -510,8 +510,12 @@ class MainWindow(QMainWindow):
             if worker and launcher:
                 worker.stop_requested.emit()
                 workers_to_wait.append(worker)
-        for w in workers_to_wait:
-            w.wait(5000)
+        # Ждём завершения воркеров, обрабатывая события — иначе окно не закрывается
+        for _ in range(50):
+            if all(not w.isRunning() for w in workers_to_wait):
+                break
+            QApplication.processEvents()
+            QThread.msleep(100)
         self._launchers.clear()
         self._workers.clear()
         event.accept()
