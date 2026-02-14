@@ -154,7 +154,10 @@ class Profile:
             "cookies": self.cookies if self.cookies is not None else [],
         }
         if self.proxy_config:
-            d["proxy"] = {"host": self.proxy_config.host, "port": self.proxy_config.port}
+            d["proxy"] = {
+                "host": self.proxy_config.host,
+                "port": self.proxy_config.port,
+            }
         if self.vless_raw:
             d["vless_raw"] = self.vless_raw
         if self.camoufox_settings:
