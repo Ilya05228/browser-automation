@@ -29,7 +29,6 @@ uv run browser-automation
 
 ## Зависимости
 
-- **Camoufox** — антидетект браузер (ставится через `uv sync`)
 - **Xray-core** — для VLESS-прокси. Нужен в PATH:
   - **Windows:** `xray.exe` — [скачать](https://github.com/XTLS/Xray-core/releases)
   - **Ubuntu/Linux:** `apt install xray` или [официальный скрипт](https://github.com/XTLS/Xray-install)
