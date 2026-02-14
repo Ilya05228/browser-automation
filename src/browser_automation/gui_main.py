@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -33,26 +34,6 @@ DEFAULT_PROFILES_PATH = Path.home() / ".config" / "browser-automation" / "profil
 
 STATUS_RUNNING = "запущен"
 STATUS_STOPPED = "не запущен"
-
-
-class LaunchWorker(QThread):
-    """Запуск Camoufox в отдельном потоке — избегает 'Sync API inside asyncio loop'."""
-
-    finished = Signal(str, object)  # profile_id, launcher
-    error = Signal(str, str)  # profile_name, error_msg
-
-    def __init__(self, profile_id: str, profile: Profile) -> None:
-        super().__init__()
-        self.profile_id = profile_id
-        self.profile = profile
-
-    def run(self) -> None:
-        try:
-            launcher = CamoufoxLauncher(profile=self.profile)
-            launcher.start()
-            self.finished.emit(self.profile_id, launcher)
-        except Exception as e:
-            self.error.emit(self.profile.name, str(e))
 
 
 class StopWorker(QThread):
@@ -173,7 +154,6 @@ class MainWindow(QMainWindow):
         self._profiles_path = Path(profiles_path)
         self._repo = ProfileRepository(self._profiles_path)
         self._launchers: dict[str, CamoufoxLauncher] = {}
-        self._launch_workers: list[LaunchWorker] = []
         self._stop_workers: list[StopWorker] = []
 
         # Таймер: проверка, не закрыл ли пользователь браузер вручную
@@ -488,21 +468,21 @@ class MainWindow(QMainWindow):
             p = self._repo.get(pid)
             if not p:
                 continue
-            worker = LaunchWorker(pid, p)
-            worker.finished.connect(self._on_launch_finished)
-            worker.error.connect(self._on_launch_error)
-            worker.start()
-            self._launch_workers.append(worker)
-
-    def _on_launch_finished(self, profile_id: str, launcher: CamoufoxLauncher) -> None:
-        self._launchers[profile_id] = launcher
-        self._refresh_table()
-        p = self._repo.get(profile_id)
-        if p:
-            QMessageBox.information(self, "Запуск", f"Браузер запущен для «{p.name}».")
-
-    def _on_launch_error(self, profile_name: str, error_msg: str) -> None:
-        QMessageBox.critical(self, "Ошибка запуска", f"{profile_name}: {error_msg}")
+            progress = QProgressDialog("Запуск браузера...", None, 0, 0, self)
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setMinimumDuration(0)
+            progress.show()
+            QApplication.processEvents()
+            try:
+                launcher = CamoufoxLauncher(profile=p)
+                launcher.start()
+                self._launchers[pid] = launcher
+                self._refresh_table()
+                QMessageBox.information(self, "Запуск", f"Браузер запущен для «{p.name}».")
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка запуска", f"{p.name}: {e}")
+            finally:
+                progress.close()
 
     def _stop_selected(self) -> None:
         ids = self._selected_ids()
@@ -561,10 +541,6 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
         self._launchers.clear()
-        for w in self._launch_workers:
-            if w.isRunning():
-                w.terminate()
-                w.wait(1000)
         event.accept()
 
 

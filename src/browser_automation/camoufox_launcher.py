@@ -114,13 +114,17 @@ class CamoufoxLauncher:
         return self._browser
 
     def get_all_browser_cookies(self) -> list[dict]:
-        """Возвращает куки из контекста (persistent и обычного)."""
+        """Возвращает куки из контекста. Использует storage_state — надёжнее cookies()."""
         if not self._context:
             return []
         try:
-            return self._context.cookies()
+            state = self._context.storage_state()
+            return state.get("cookies", [])
         except Exception:
-            return []
+            try:
+                return self._context.cookies()
+            except Exception:
+                return []
 
     def is_running(self) -> bool:
         """Проверяет, подключён ли браузер (не закрыт ли вручную)."""
