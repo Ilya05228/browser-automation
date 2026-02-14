@@ -34,7 +34,7 @@ GUI для управления профилями Camoufox с поддержк�
 
 **Windows** — один exe без консоли:
 ```bash
-pyinstaller browser-automation.spec --noconfirm -w
+pyinstaller browser-automation.spec --noconfirm
 ```
 → `dist/browser-automation.exe`
 
