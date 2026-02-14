@@ -39,17 +39,28 @@ GUI для управления профилями Camoufox с поддержк�
 Используйте готовый `browser-automation.spec` (включает apify_fingerprint_datapoints, camoufox, language_tags):
 
 **Windows** — один exe без консоли:
+
 ```bash
 pyinstaller browser-automation.spec --noconfirm
 ```
+
 → `dist/browser-automation.exe`
 
 **Linux:**
+
 ```bash
 pyinstaller browser-automation.spec --noconfirm
 ```
+
 → `dist/browser-automation`
 
 ## Полезное
 
 - https://amiunique.org/
+
+## задачи
+
+- Структурировать код
+- Авто загрузка xray
+- Починка запуска на Windows
+- Импорт экспорт куков и настроек.
