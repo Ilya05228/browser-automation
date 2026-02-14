@@ -70,7 +70,9 @@ class CamoufoxLauncher:
         kwargs: dict = {
             "headless": self._settings.headless,
             "humanize": self._settings.humanize,
-            "exclude_addons": [DefaultAddons.UBO] if self._settings.exclude_ublock else [],
+            "exclude_addons": [DefaultAddons.UBO]
+            if self._settings.exclude_ublock
+            else [],
             "enable_cache": self._settings.enable_cache,
             "locale": self._settings.locale,
         }
@@ -78,7 +80,9 @@ class CamoufoxLauncher:
             kwargs["window"] = self._settings.window
         if proxy_config:
             kwargs["proxy"] = proxy_config.to_playwright_proxy()
-            kwargs["geoip"] = True  # устраняет LeakWarning, согласует гео/локаль с IP прокси
+            kwargs["geoip"] = (
+                True  # устраняет LeakWarning, согласует гео/локаль с IP прокси
+            )
 
         use_persistent = bool(self._data_dir)
         if use_persistent:
@@ -98,33 +102,17 @@ class CamoufoxLauncher:
                 extra_http_headers={"Accept-Language": self._settings.locale},
                 locale=self._settings.locale,
             )
-        if self._profile and self._profile.cookies:
-            try:
-                self._context.add_cookies(self._profile.cookies)
-            except Exception:
-                pass
 
         # persistent_context уже открывает страницу — используем её, чтобы не было 2 вкладок
-        page = self._context.pages[0] if self._context.pages else self._context.new_page()
+        page = (
+            self._context.pages[0] if self._context.pages else self._context.new_page()
+        )
         page.goto("about:blank")
         # Заголовок окна = название профиля
         if self._profile and self._profile.name:
             page.evaluate(f"document.title = {json.dumps(self._profile.name)}")
         page.bring_to_front()
         return self._browser
-
-    def get_all_browser_cookies(self) -> list[dict]:
-        """Возвращает куки из контекста. Использует storage_state — надёжнее cookies()."""
-        if not self._context:
-            return []
-        try:
-            state = self._context.storage_state()
-            return state.get("cookies", [])
-        except Exception:
-            try:
-                return self._context.cookies()
-            except Exception:
-                return []
 
     def is_running(self) -> bool:
         """Проверяет, подключён ли браузер (не закрыт ли вручную)."""
